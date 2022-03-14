@@ -5,16 +5,26 @@
 //+------------------------------------------------------------------+
 #property strict
 #include <Controls\RadioGroup.mqh>;
+#include <Controls\Button.mqh>;
 
 string ORDER_BUTTON_NAME = "OrderButton";
 double risk_percent = 0.25;
 double stop_loss = 10.2; //pips need to change to stoploss
+double entry_price = 0.00001;
+
 int orderTypeVal = 0;
 int limitOrderTypeVal = 0;
+int orderExecTypeVal = 0;
+
 bool radioGroup2Created = false;
+bool radioGroup3Created = false;
 
 CRadioGroup m_radioGroup1;
 CRadioGroup m_radioGroup2;
+CRadioGroup m_radioGroup3;
+CButton placeOrderButton;
+
+int ticket = 0;
 
 int OnInit()
 {
@@ -31,6 +41,7 @@ int OnInit()
    //| - Limit Order Type Radio Button
    //| - Factor in spread
    //| - Add sound wav when order is sent
+   //| - Order Backend
    //| -                                                                   |
    //+------------------------------------------------------------------+
    
@@ -42,30 +53,39 @@ int OnInit()
 
 
 void GUI_Build()
-{   
+{  
    // Risk Text Field
-   CreateLabel("risk_percent_label", 10, 20, "Risk %");
+   CreateLabel("risk_percent_label", 10, 20, "Risk % (*)");
    CreateTextField("risk_percent", 140, 30, 10, 50, "0.25");
    
    // stop loss price Text Field
-   CreateLabel("stop_loss_pips_label", 160, 20, "Stop Loss - Pips");
+   CreateLabel("stop_loss_pips_label", 160, 20, "Stop Loss - Pips (*)");
    CreateTextField("stop_loss_pips", 140, 30, 160, 50, "2.1");
-   
-   // entry price Text Field
-   CreateLabel("entry_price_label", 10, 90, "Entry Price");
-   CreateTextField("entry_price", 300, 30, 10, 120, "0.00001");
-   
+
    // order type radio button
-   CreateLabel("order_type_label", 10, 160, "Order Type");
-   string radio_buttons[2] = {"Market Execution", "Limit Order"};
    int labelxsize[2] = {40, 40};
    int labelysize[2] = {190, 210};
    int buttonxsize[2] = {20, 20};
    int buttonysize[2] = {190, 210};
+   
+   string radio_buttons[2] = {"Market Execution", "Limit Order"};
+   CreateLabel("order_type_label", 10, 160, "Order Type");
    CreateRadioGroup(m_radioGroup1, radio_buttons, 2, "OrderType", labelxsize, labelysize, buttonxsize, buttonysize);
+  
+   
+   CreateOrderExecutionRadioButton();
+   
+   ReorderRadioButtonsOnChange(0);
    
    // Order Button
    CreatePlaceOrderButton();
+}
+
+void CreateEntryPriceTextField()
+{
+   // entry price Text Field
+   CreateLabel("entry_price_label", 10, 90, "Entry Price");
+   CreateTextField("entry_price", 300, 30, 10, 120, "0.00001");
 }
 
 void CreateLimitOrderTypeRadio()
@@ -82,17 +102,32 @@ void CreateLimitOrderTypeRadio()
    CreateRadioGroup(m_radioGroup2, lot_radio_buttons, 4, "LimitOrderType", labelxsize, labelysize, buttonxsize, buttonysize);
 }
 
+
+void CreateOrderExecutionRadioButton()
+{
+   // type of order type radio button
+   string _radio_buttons[2] = {"Buy", "Sell"};
+   
+   int labelxsize[2] = {40, 40};
+   int labelysize[2] = {260, 280};
+   int buttonxsize[2] = {20, 20};
+   int buttonysize[2] = {260, 280};
+   
+   CreateLabel("order_execution_type_label", 10, 165, "Order Execution Type");
+   CreateRadioGroup(m_radioGroup3, _radio_buttons, 2, "OrderExecutionType", labelxsize, labelysize, buttonxsize, buttonysize);
+}
+
 void OnDeinit(const int reason)
 {
    m_radioGroup1.Destroy();
    m_radioGroup2.Destroy();
+   m_radioGroup3.Destroy();
 }
 
 
 void OnTick()
 {
-
-   
+   onClick();   
 }
 
 bool CreateRadioGroup(CRadioGroup& radioGroup, string& radio_buttons[], int count, string group_name, int& labelxsize[],
@@ -107,6 +142,7 @@ bool CreateRadioGroup(CRadioGroup& radioGroup, string& radio_buttons[], int coun
       if(!radioGroup.AddItem(radio_buttons[i], i)) return(false);
 
    radioGroup.Value(0);
+   radioGroup3Created = true;
    return(true);
 }
 
@@ -135,15 +171,17 @@ void RadioGroupPositioning(
 
 void CreatePlaceOrderButton()
 {
-   ObjectCreate(0, ORDER_BUTTON_NAME, OBJ_BUTTON, 0, 0, 0);
-   ObjectSetInteger(0, ORDER_BUTTON_NAME, OBJPROP_XSIZE, 300);
-   ObjectSetInteger(0, ORDER_BUTTON_NAME, OBJPROP_YSIZE, 50);
-   ObjectSetInteger(0, ORDER_BUTTON_NAME, OBJPROP_XDISTANCE, 10);
-   ObjectSetInteger(0, ORDER_BUTTON_NAME, OBJPROP_YDISTANCE, 250);
-   ObjectSetInteger(0, ORDER_BUTTON_NAME, OBJPROP_COLOR, clrWhite);
-   ObjectSetInteger(0, ORDER_BUTTON_NAME, OBJPROP_BGCOLOR, clrGreen);
+   //ObjectCreate(0, ORDER_BUTTON_NAME, OBJ_BUTTON, 0, 0, 0);
+   //ObjectSetInteger(0, ORDER_BUTTON_NAME, OBJPROP_XSIZE, 300);
+   //ObjectSetInteger(0, ORDER_BUTTON_NAME, OBJPROP_YSIZE, 50);
    
-   ObjectSetString(0, ORDER_BUTTON_NAME, OBJPROP_TEXT, "Place Order");
+   placeOrderButton.Create(0,ORDER_BUTTON_NAME,0,10,0,300,50);
+   placeOrderButton.Text("Place Order");
+   placeOrderButton.FontSize(10);
+   placeOrderButton.Color(clrWhite);
+   placeOrderButton.ColorBackground(clrGreen);
+   ObjectSetInteger(0, ORDER_BUTTON_NAME, OBJPROP_XDISTANCE, 10);
+   ObjectSetInteger(0, ORDER_BUTTON_NAME, OBJPROP_YDISTANCE, 300);
 }
 
 void CreateTextField(string field_name, int xsize, int ysize, int xdistance, int ydistance, string default_text)
@@ -177,7 +215,9 @@ void RadioButtonOnChangeEvent(int id, string sparam, int count, string& item[], 
             bool selected = ObjectGetInteger(0,sparam,OBJPROP_STATE);
             ObjectSetInteger(0,sparam,OBJPROP_STATE, 1);
             
-            type == "OrderType" ? orderTypeVal = i : limitOrderTypeVal = i;
+            if(type == "OrderType") orderTypeVal = i;
+            else if(type == "LimitOrderType") limitOrderTypeVal = i;
+            else if(type == "OrderExecutionType") orderExecTypeVal = i;
             
             if(selected)
             {
@@ -194,26 +234,82 @@ void RadioButtonOnChangeEvent(int id, string sparam, int count, string& item[], 
    }
 }
 
+void ReorderRadioButtonsOnChange(int order)
+{
+   if (order == 0)
+   {
+      int orderTypeLabelxsize[2] = {40, 40};
+      int orderTypeLabelysize[2] = {120, 140};
+      int orderTypeButtonxsize[2] = {20, 20};
+      int orderTypeButtonysize[2] = {120, 140};
+      
+      int orderExecutionTypeLabelxsize[2] = {40, 40};
+      int orderExecutionTypeLabelysize[2] = {190, 210};
+      int orderExecutionTypeButtonxsize[2] = {20, 20};
+      int orderExecutionTypeButtonysize[2] = {190, 210};
+      
+      ObjectSetInteger(0, "order_type_label", OBJPROP_YDISTANCE, 90);
+      
+      RadioGroupPositioning(2, "OrderType", orderTypeLabelxsize, orderTypeLabelysize, orderTypeButtonxsize, orderTypeButtonysize);
+      RadioGroupPositioning(2, "OrderExecutionType", orderExecutionTypeLabelxsize, orderExecutionTypeLabelysize, orderExecutionTypeButtonxsize, orderExecutionTypeButtonysize);
+   
+   } 
+   else
+   {
+      int orderTypeLabelxsize[2] = {40, 40};
+      int orderTypeLabelysize[2] = {190, 210};
+      int orderTypeButtonxsize[2] = {20, 20};
+      int orderTypeButtonysize[2] = {190, 210};
+      
+      int orderExecutionTypeLabelxsize[2] = {40, 40};
+      int orderExecutionTypeLabelysize[2] = {260, 280};
+      int orderExecutionTypeButtonxsize[2] = {20, 20};
+      int orderExecutionTypeButtonysize[2] = {260, 280};
+      
+      ObjectSetInteger(0, "order_type_label", OBJPROP_YDISTANCE, 160);
+      
+      RadioGroupPositioning(2, "OrderType", orderTypeLabelxsize, orderTypeLabelysize, orderTypeButtonxsize, orderTypeButtonysize);
+      RadioGroupPositioning(2, "OrderExecutionType", orderExecutionTypeLabelxsize, orderExecutionTypeLabelysize, orderExecutionTypeButtonxsize, orderExecutionTypeButtonysize);
+   
+   }
+  
+}
+
 void OrderTypeRadioButtonItemEvent(int id, string sparam)
 {
    string item[2] = {"OrderTypeItem0Button", "OrderTypeItem1Button"};
    RadioButtonOnChangeEvent(id, sparam, 2, item, "OrderType");
    
-   if(orderTypeVal == 1 && !radioGroup2Created) 
+   if(orderTypeVal == 1 && !radioGroup2Created && radioGroup3Created) 
    {
       CreateLimitOrderTypeRadio();
+      CreateEntryPriceTextField();
+      ReorderRadioButtonsOnChange(1);
+      
       radioGroup2Created = true;
+      radioGroup3Created = false;
+      m_radioGroup3.Destroy();
+      
+      ObjectDelete(0, "order_execution_type_label");
       ObjectSetInteger(0, ORDER_BUTTON_NAME, OBJPROP_YDISTANCE, 360);
-      ObjectSetString(0, "limit_order_type_label", OBJPROP_TEXT, "Limit Order Type");
    }
-   else if (orderTypeVal != 1 && radioGroup2Created) 
+   
+   else if (orderTypeVal == 0 && radioGroup2Created && !radioGroup3Created) 
    {
-      ObjectSetInteger(0, ORDER_BUTTON_NAME, OBJPROP_YDISTANCE, 250);
-      ObjectSetString(0, "limit_order_type_label", OBJPROP_TEXT, "");
+      CreateOrderExecutionRadioButton();
+      ReorderRadioButtonsOnChange(0);
+   
+      ObjectDelete(0, "limit_order_type_label");
+      ObjectSetInteger(0, ORDER_BUTTON_NAME, OBJPROP_YDISTANCE, 320);
+      ObjectDelete(0, "entry_price_label");
+      ObjectDelete(0, "entry_price");
+      
       radioGroup2Created = false;
+      radioGroup3Created = true;
       m_radioGroup2.Destroy();
    }
    
+  
    //PrintFormat("Order Type Value: %i & Radio 2 created: %i", orderTypeVal, radioGroup2Created);
 }
 
@@ -223,54 +319,96 @@ void LimitOrderTypeRadioButtonItemEvent(int id, string sparam)
    RadioButtonOnChangeEvent(id, sparam, 4, item, "LimitOrderType");
 }
 
-void OnChartEvent(const int id, const long& lparam, const double& dparam, const string& sparam) 
-{   
-   //Print("id: ", id, "lparam: ", lparam, "sparam", sparam);
+void OrderExecutionTypeRadioButtonItemEvent(int id, string sparam)
+{
+   string item[2] = {"OrderExecutionTypeItem0Button", "OrderExecutionTypeItem1Button"};
+   RadioButtonOnChangeEvent(id, sparam, 2, item, "OrderExecutionType");
+}
 
-   OrderTypeRadioButtonItemEvent(id, sparam);
-   LimitOrderTypeRadioButtonItemEvent(id, sparam);
-      
-   if (sparam == ORDER_BUTTON_NAME) 
+void onClick()
+{
+   if (bool(ObjectGetInteger(0, ORDER_BUTTON_NAME, OBJPROP_STATE)))
    {
+      Print("Clicked");
       string risk_percent_string = ObjectGetString(0, "risk_percent", OBJPROP_TEXT);
       risk_percent = StringToDouble(risk_percent_string);
       
       string stop_loss_string = ObjectGetString(0, "stop_loss_pips", OBJPROP_TEXT);
       stop_loss = StringToDouble(stop_loss_string);
-   
-      //set a timer here to slow the change in setting the object click and unclick state
-      Sleep(30);
       
-      Print("risk percent: ", risk_percent);
-      ObjectSetInteger(0, ORDER_BUTTON_NAME, OBJPROP_STATE, false);
+      if (ObjectFind(0, "entry_price") == 0)
+      {         
+         string entry_price_string = ObjectGetString(0, "entry_price", OBJPROP_TEXT);
+         entry_price = StringToDouble(entry_price_string);
+      }
+      
+      double lots = GetLots();
+      double spread = CalculateSpread(Ask, Bid);
+      double stoploss = orderTypeVal == 0 && radioGroup3Created ? 
+                        orderExecTypeVal == 0 ? 
+                        Ask - PipsToPrice(stop_loss) : 
+                        Bid + PipsToPrice(stop_loss) + spread : 
+                        limitOrderTypeVal == 0 || limitOrderTypeVal == 2 ? 
+                        entry_price - PipsToPrice(stop_loss) :
+                        entry_price + (PipsToPrice(stop_loss) + spread);
+                        
+      double entryPlusSpread = entry_price + spread;
+                        
+
+      if (orderTypeVal == 0 && radioGroup3Created) 
+      {
+         ticket = OrderSend(_Symbol, orderExecTypeVal == 0 ? OP_BUY : OP_SELL, lots, orderExecTypeVal == 0 ? Ask : Bid, 3, stoploss, 0, "", 3238, 0, clrTeal);
+         Print("Order Send1: ", ticket);  
+      }
+      
+      if (orderTypeVal == 1 && radioGroup2Created)
+      {
+         ticket = OrderSend(_Symbol, limitOrderTypeVal == 0 ? 
+            OP_BUYSTOP : limitOrderTypeVal == 1 ? 
+            OP_SELLSTOP : limitOrderTypeVal == 2 ? 
+            OP_BUYLIMIT : limitOrderTypeVal == 3 ? 
+            OP_SELLLIMIT : NULL, lots, 
+            limitOrderTypeVal == 0 || limitOrderTypeVal == 2 ? 
+            entryPlusSpread : entry_price, 3, stoploss, 0, "", 3238, 0, clrTeal);
+         Print("Order Send2 Limit: ", ticket);  
+      }
+      Alert(GetLastError());
+   
+      Sleep(30);
+      placeOrderButton.Pressed(false);
    }
 }
 
-void Execute(string symbol) 
-{
-   PrintFormat("Base Currency is %s", AccountCurrency());
-   PrintFormat("Testing for symbol %s", symbol);
-   double ptValue = PointVal(symbol);
-   PrintFormat("ValuePerPoint for %s is %f", symbol, ptValue);
-   
-   
-   GetLots(symbol);
-   
+void OnChartEvent(const int id, const long& lparam, const double& dparam, const string& sparam) 
+{   
+   Print("id: ", id, "lparam: ", lparam, "sparam", sparam);
+
+   OrderTypeRadioButtonItemEvent(id, sparam);
+   LimitOrderTypeRadioButtonItemEvent(id, sparam);
+   OrderExecutionTypeRadioButtonItemEvent(id, sparam);
 }
 
-double ConvertStopLossPoints() {
-   return 0;
+double PipSize(string symbol)
+{
+   double point = MarketInfo(symbol, MODE_POINT);
+   int digits = (int)MarketInfo(symbol, MODE_DIGITS);
+   return(((digits % 2) == 1) ? point*10 : point);
 }
 
-double GetLots(string symbol)
+//0.93540
+double PipsToPrice(double pips) {
+   return (pips*PipSize(_Symbol));
+}
+
+double GetLots()
 {
-   double lots = 0.5;
+   double lots = 0.25;
    
    if (risk_percent > 0) {
-      // Fixed risk amt & SL, how many lots to trade?
-      double riskAmt = AccountEquity() * (risk_percent/100);
-      lots = (riskAmt / stop_loss) / PointVal(symbol);
-      PrintFormat("Risk lots for %s value %f and SL at %f point is %f", symbol, riskAmt, stop_loss, lots);
+      double riskAmt = AccountBalance() * (risk_percent/100);
+      lots = NormalizeDouble(((riskAmt / stop_loss) / PointVal()) * 0.1, 2);
+      // works perfectly for other items except for symbols like gold
+      PrintFormat("Risk lots for %s value %f and SL at %f point is %f", _Symbol, riskAmt, stop_loss, lots);
    }
    
    if (lots < MarketInfo(Symbol(), MODE_MINLOT)) 
@@ -287,26 +425,26 @@ double GetLots(string symbol)
    return lots;
 }
 
+
 //---
 // Calculate the value in base currecny
 // of a one pt move in the price
 // of the supplied currency for one lot
 
-double PointVal(string symbol) 
+double PointVal() 
 {
    double tickSize = MarketInfo(Symbol(), MODE_TICKSIZE);
    double tickValue = MarketInfo(Symbol(), MODE_TICKVALUE);
    double point = MarketInfo(Symbol(), MODE_POINT);
    double ticksPerPt = tickSize / point;
-   double ptValue = tickValue / ticksPerPt;
-   
-   PrintFormat("ticksize=%f, tickValue=%f, point=%f, tickPerPoint=%f, ptValue", tickSize, tickValue, point, ticksPerPt, ptValue);
-   return ptValue;
+   return tickValue / ticksPerPt;
 }
 
 
-double CalculateSpread(double pAsk, double pBid, string symbol)
+double CalculateSpread(double pAsk, double pBid)
 {
+   PrintFormat("Ask: %f & Bid: %f", pAsk, pBid);
    double currentSpread = pAsk - pBid;
-   return currentSpread / _Point;
+   //return MathRound(currentSpread / _Point);
+   return currentSpread;
 }
