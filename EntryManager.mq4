@@ -25,29 +25,11 @@ CRadioGroup m_radioGroup3;
 CButton placeOrderButton;
 
 int ticket = 0;
+string ticketType = "instant_buy";
 
 int OnInit()
-{
-   //Execute("AUDUSD");
-   //Execute("EURUSD");
-   //Execute("USDJPY");
-   //Execute("GBPJPY");
-   
-   //+------------------------------------------------------------------+
-   //| - Risk
-   //| - SL - Pips --> gets Converted to Price
-   //| - Entry Price
-   //| - Order Type Radio Button
-   //| - Limit Order Type Radio Button
-   //| - Factor in spread
-   //| - Add sound wav when order is sent
-   //| - Order Backend
-   //| -                                                                   |
-   //+------------------------------------------------------------------+
-   
-   
-   GUI_Build();   
-   
+{   
+   GUI_Build();
    return(INIT_SUCCEEDED);
 }
 
@@ -76,6 +58,7 @@ void GUI_Build()
    CreateOrderExecutionRadioButton();
    
    ReorderRadioButtonsOnChange(0);
+   DestroyEntryPriceTextField();
    
    // Order Button
    CreatePlaceOrderButton();
@@ -86,6 +69,12 @@ void CreateEntryPriceTextField()
    // entry price Text Field
    CreateLabel("entry_price_label", 10, 90, "Entry Price");
    CreateTextField("entry_price", 300, 30, 10, 120, "0.00001");
+}
+
+void DestroyEntryPriceTextField()
+{
+   ObjectDelete(0, "entry_price_label");
+   ObjectDelete(0, "entry_price");
 }
 
 void CreateLimitOrderTypeRadio()
@@ -127,7 +116,7 @@ void OnDeinit(const int reason)
 
 void OnTick()
 {
-   onClick();   
+   //onClick();   
 }
 
 bool CreateRadioGroup(CRadioGroup& radioGroup, string& radio_buttons[], int count, string group_name, int& labelxsize[],
@@ -171,10 +160,6 @@ void RadioGroupPositioning(
 
 void CreatePlaceOrderButton()
 {
-   //ObjectCreate(0, ORDER_BUTTON_NAME, OBJ_BUTTON, 0, 0, 0);
-   //ObjectSetInteger(0, ORDER_BUTTON_NAME, OBJPROP_XSIZE, 300);
-   //ObjectSetInteger(0, ORDER_BUTTON_NAME, OBJPROP_YSIZE, 50);
-   
    placeOrderButton.Create(0,ORDER_BUTTON_NAME,0,10,0,300,50);
    placeOrderButton.Text("Place Order");
    placeOrderButton.FontSize(10);
@@ -301,16 +286,12 @@ void OrderTypeRadioButtonItemEvent(int id, string sparam)
    
       ObjectDelete(0, "limit_order_type_label");
       ObjectSetInteger(0, ORDER_BUTTON_NAME, OBJPROP_YDISTANCE, 320);
-      ObjectDelete(0, "entry_price_label");
-      ObjectDelete(0, "entry_price");
+      DestroyEntryPriceTextField();
       
       radioGroup2Created = false;
       radioGroup3Created = true;
       m_radioGroup2.Destroy();
    }
-   
-  
-   //PrintFormat("Order Type Value: %i & Radio 2 created: %i", orderTypeVal, radioGroup2Created);
 }
 
 void LimitOrderTypeRadioButtonItemEvent(int id, string sparam)
@@ -329,7 +310,6 @@ void onClick()
 {
    if (bool(ObjectGetInteger(0, ORDER_BUTTON_NAME, OBJPROP_STATE)))
    {
-      Print("Clicked");
       string risk_percent_string = ObjectGetString(0, "risk_percent", OBJPROP_TEXT);
       risk_percent = StringToDouble(risk_percent_string);
       
@@ -357,10 +337,8 @@ void onClick()
 
       if (orderTypeVal == 0 && radioGroup3Created) 
       {
-         ticket = OrderSend(_Symbol, orderExecTypeVal == 0 ? OP_BUY : OP_SELL, lots, orderExecTypeVal == 0 ? Ask : Bid, 3, stoploss, 0, "", 3238, 0, clrTeal);
-         Print("Order Send1: ", ticket);  
-      }
-      
+         ticket = OrderSend(_Symbol, orderExecTypeVal == 0 ? OP_BUY : OP_SELL, lots, orderExecTypeVal == 0 ? Ask : Bid, 2, stoploss, 0, "", 3238, 0, clrTeal);
+      }      
       if (orderTypeVal == 1 && radioGroup2Created)
       {
          ticket = OrderSend(_Symbol, limitOrderTypeVal == 0 ? 
@@ -369,23 +347,29 @@ void onClick()
             OP_BUYLIMIT : limitOrderTypeVal == 3 ? 
             OP_SELLLIMIT : NULL, lots, 
             limitOrderTypeVal == 0 || limitOrderTypeVal == 2 ? 
-            entryPlusSpread : entry_price, 3, stoploss, 0, "", 3238, 0, clrTeal);
-         Print("Order Send2 Limit: ", ticket);  
+            entryPlusSpread : entry_price, 2, stoploss, 0, "", 3238, 0, clrTeal);
       }
-      Alert(GetLastError());
-   
-      Sleep(30);
-      placeOrderButton.Pressed(false);
+      
+      if(ticket == -1) {
+         PlaySound("timeout.wav");
+         Alert("An error has occured: Error-" + IntegerToString(GetLastError()));
+      }
+      else PlaySound("Ok.wav");
+      
+      ObjectSetInteger(0, ORDER_BUTTON_NAME, OBJPROP_STATE, false);
    }
 }
 
 void OnChartEvent(const int id, const long& lparam, const double& dparam, const string& sparam) 
 {   
-   Print("id: ", id, "lparam: ", lparam, "sparam", sparam);
-
    OrderTypeRadioButtonItemEvent(id, sparam);
    LimitOrderTypeRadioButtonItemEvent(id, sparam);
    OrderExecutionTypeRadioButtonItemEvent(id, sparam);
+   
+   if (sparam == ORDER_BUTTON_NAME && id == CHARTEVENT_OBJECT_CLICK)
+   {
+      onClick();
+   }
 }
 
 double PipSize(string symbol)
@@ -395,7 +379,6 @@ double PipSize(string symbol)
    return(((digits % 2) == 1) ? point*10 : point);
 }
 
-//0.93540
 double PipsToPrice(double pips) {
    return (pips*PipSize(_Symbol));
 }
@@ -407,8 +390,6 @@ double GetLots()
    if (risk_percent > 0) {
       double riskAmt = AccountBalance() * (risk_percent/100);
       lots = NormalizeDouble(((riskAmt / stop_loss) / PointVal()) * 0.1, 2);
-      // works perfectly for other items except for symbols like gold
-      PrintFormat("Risk lots for %s value %f and SL at %f point is %f", _Symbol, riskAmt, stop_loss, lots);
    }
    
    if (lots < MarketInfo(Symbol(), MODE_MINLOT)) 
