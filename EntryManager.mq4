@@ -8,7 +8,7 @@
 #include <Controls\Button.mqh>;
 
 string ORDER_BUTTON_NAME = "OrderButton";
-double risk_percent = 0.25;
+double risk_percent = 0.22;
 double stop_loss = 10.2; //pips need to change to stoploss
 double entry_price = 0.00001;
 
@@ -38,7 +38,7 @@ void GUI_Build()
 {  
    // Risk Text Field
    CreateLabel("risk_percent_label", 10, 20, "Risk % (*)");
-   CreateTextField("risk_percent", 140, 30, 10, 50, "0.25");
+   CreateTextField("risk_percent", 140, 30, 10, 50, "0.22");
    
    // stop loss price Text Field
    CreateLabel("stop_loss_pips_label", 160, 20, "Stop Loss - Pips (*)");
