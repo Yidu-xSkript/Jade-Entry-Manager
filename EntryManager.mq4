@@ -11,6 +11,7 @@ string ORDER_BUTTON_NAME = "OrderButton";
 double risk_percent = 0.22;
 double stop_loss = 10.2; //pips need to change to stoploss
 double entry_price = 0.00001;
+double spreadInPoints = 0;
 
 int orderTypeVal = 0;
 int limitOrderTypeVal = 0;
@@ -322,8 +323,8 @@ void onClick()
          entry_price = StringToDouble(entry_price_string);
       }
       
-      double lots = GetLots();
       double spread = CalculateSpread(Ask, Bid);
+      double lots = GetLots(spreadInPoints);
       double stoploss = orderTypeVal == 0 && radioGroup3Created ? 
                         orderExecTypeVal == 0 ? 
                         Ask - PipsToPrice(stop_loss) : 
@@ -383,13 +384,13 @@ double PipsToPrice(double pips) {
    return (pips*PipSize(_Symbol));
 }
 
-double GetLots()
+double GetLots(double spread)
 {
    double lots = 0.25;
    
    if (risk_percent > 0) {
       double riskAmt = AccountBalance() * (risk_percent/100);
-      lots = NormalizeDouble(((riskAmt / stop_loss) / PointVal()) * 0.1, 2);
+      lots = NormalizeDouble(((riskAmt / (spread + stop_loss)) / PointVal()) * 0.1, 2);
    }
    
    if (lots < MarketInfo(Symbol(), MODE_MINLOT)) 
@@ -426,6 +427,6 @@ double CalculateSpread(double pAsk, double pBid)
 {
    PrintFormat("Ask: %f & Bid: %f", pAsk, pBid);
    double currentSpread = pAsk - pBid;
-   //return MathRound(currentSpread / _Point);
+   spreadInPoints = MathRound(currentSpread / _Point);
    return currentSpread;
 }
