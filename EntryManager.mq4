@@ -389,6 +389,7 @@ void ModifyTrades(string buttonName, string type)
             }
          }
       }
+      ObjectSetInteger(0, buttonName, OBJPROP_STATE, false);
    }
 }
 
