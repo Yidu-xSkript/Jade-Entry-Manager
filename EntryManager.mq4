@@ -324,7 +324,7 @@ void onClick()
       }
       
       double spread = CalculateSpread(Ask, Bid);
-      double lots = GetLots(spreadInPoints);
+      double lots = GetLots();
       double stoploss = orderTypeVal == 0 && radioGroup3Created ? 
                         orderExecTypeVal == 0 ? 
                         Ask - PipsToPrice(stop_loss) : 
@@ -384,13 +384,13 @@ double PipsToPrice(double pips) {
    return (pips*PipSize(_Symbol));
 }
 
-double GetLots(double spread)
+double GetLots()
 {
    double lots = 0.25;
    
    if (risk_percent > 0) {
       double riskAmt = AccountBalance() * (risk_percent/100);
-      lots = NormalizeDouble(((riskAmt / (spread + stop_loss)) / PointVal()) * 0.1, 2);
+      lots = NormalizeDouble(((riskAmt / (spreadInPoints + stop_loss)) / PointVal()) * 0.1, 2);
    }
    
    if (lots < MarketInfo(Symbol(), MODE_MINLOT)) 
