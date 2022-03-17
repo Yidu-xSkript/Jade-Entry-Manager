@@ -9,7 +9,7 @@
 
 string ORDER_BUTTON_NAME = "OrderButton";
 string BE_BUTTON_NAME = "BEButton";
-string CLOSE_BUTTON_NAME = "CloseButton";
+string DELETE_BUTTON_NAME = "DeleteButton";
 double risk_percent = 0.22;
 double stop_loss = 10.2; //pips need to change to stoploss
 double entry_price = 0.00001;
@@ -75,9 +75,9 @@ void GUI_Build()
    DestroyEntryPriceTextField();
    
    // Order Button
-   CreateButton("Place Order", clrWhite, clrGreen, 10, 250, ORDER_BUTTON_NAME, 10, 0, 300, 50);
-   CreateButton("Close ALL", clrWhite, clrGray, 10, 320, BE_BUTTON_NAME, 10, 0, 120, 50);
-   CreateButton("Break Even", clrWhite, clrGray, 180, 320, CLOSE_BUTTON_NAME, 10, 0, 120, 50);
+   CreateButton("Place Order", clrWhite, clrGreen, clrWhite, 10, 250, ORDER_BUTTON_NAME, 10, 0, 300, 50);
+   CreateButton("X Orders [P | O]", clrBlack, clrWhiteSmoke, clrBlack, 10, 320, DELETE_BUTTON_NAME, 10, 0, 140, 50);
+   CreateButton("Break Even", clrBlack, clrWhiteSmoke, clrBlack, 180, 320, BE_BUTTON_NAME, 10, 0, 140, 50);
 }
 
 void CreateEntryPriceTextField()
@@ -122,12 +122,13 @@ void CreateOrderExecutionRadioButton()
    CreateRadioGroup(m_radioGroup3, 2, _radio_buttons, "OrderExecutionType", labelxsize, labelysize, buttonxsize, buttonysize);
 }
 
-void CreateButton(string _text, color _textColor, color _bg, int _xDistance, int _yDistance, string buttonName, int x1, int y1, int x2, int y2)
+void CreateButton(string _text, color _textColor, color _bg, color _brdrColor, int _xDistance, int _yDistance, string buttonName, int x1, int y1, int x2, int y2)
 {
    button.Create(0, buttonName, 0, x1, y1, x2, y2);
    button.Text(_text);
    button.FontSize(10);
    button.Color(_textColor);
+   button.ColorBorder(_brdrColor);
    button.ColorBackground(_bg);
    ObjectSetInteger(0, buttonName, OBJPROP_XDISTANCE, _xDistance);
    ObjectSetInteger(0, buttonName, OBJPROP_YDISTANCE, _yDistance);
@@ -282,7 +283,7 @@ void OrderTypeRadioButtonItemEvent(int id, string sparam)
       ObjectDelete(0, "order_execution_type_label");
       ObjectSetInteger(0, ORDER_BUTTON_NAME, OBJPROP_YDISTANCE, 360);
       ObjectSetInteger(0, BE_BUTTON_NAME, OBJPROP_YDISTANCE, 420);
-      ObjectSetInteger(0, CLOSE_BUTTON_NAME, OBJPROP_YDISTANCE, 420);
+      ObjectSetInteger(0, DELETE_BUTTON_NAME, OBJPROP_YDISTANCE, 420);
    }
    
    else if (orderTypeVal == 0 && radioGroup2Created && !radioGroup3Created) 
@@ -293,7 +294,7 @@ void OrderTypeRadioButtonItemEvent(int id, string sparam)
       ObjectDelete(0, "limit_order_type_label");
       ObjectSetInteger(0, ORDER_BUTTON_NAME, OBJPROP_YDISTANCE, 250);
       ObjectSetInteger(0, BE_BUTTON_NAME, OBJPROP_YDISTANCE, 320);
-      ObjectSetInteger(0, CLOSE_BUTTON_NAME, OBJPROP_YDISTANCE, 320);
+      ObjectSetInteger(0, DELETE_BUTTON_NAME, OBJPROP_YDISTANCE, 320);
       DestroyEntryPriceTextField();
       
       radioGroup2Created = false;
@@ -366,31 +367,68 @@ void Order()
    }
 }
 
-void ModifyTrades(string buttonName, string type)
+string priceStatus()
 {
-   if (bool(ObjectGetInteger(0, buttonName, OBJPROP_STATE)))
+   return OrderType() == OP_BUY || OrderType() == OP_BUYSTOP || OrderType() == OP_SELLLIMIT ? "buy" : "sell";
+}
+
+void CloseTrades()
+{
+   if (bool(ObjectGetInteger(0, DELETE_BUTTON_NAME, OBJPROP_STATE)))
    {
-      for(int i=0; i < OrdersTotal(); i++)
+      for(int i=1; i <= OrdersTotal(); i++)
       {
-         if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES) == true)
+         while(OrderSelect(i-1, SELECT_BY_POS))
          {
-            if (OrderSymbol() == _Symbol && OrderMagicNumber() == magicNumber)
+            if (OrderSymbol() == Symbol() && OrderMagicNumber() == magicNumber)
             {
-               if (type == "close")
-               {
-                  double price = OrderType() == OP_BUY || OrderType() == OP_BUYSTOP || OrderType() == OP_SELLLIMIT ? Ask : Bid;
-                  if(!OrderClose(OrderTicket(), OrderLots(), price, clrRed)) 
-                     Alert("An error occured when closing order ticket-" + IntegerToString(OrderTicket()) + " | Error Code - " + IntegerToString(GetLastError()));
+               bool result = true;
+               if (OrderType() > 1)  result = OrderDelete(OrderTicket());
+               else if (OrderType() != -1 && OrderType() <= 1) result = OrderClose(OrderTicket(), OrderLots(), priceStatus() == "buy" ? Ask : Bid, slippage, clrRed);
+               else {
+                  Alert("Sorry, An error has occured. Error-", GetLastError());
+                  break;
                }
                
-               if (type == "modify")
-                  if (!OrderModify(OrderTicket(), OrderOpenPrice(), OrderOpenPrice(), OrderTakeProfit(), 0, clrBlue))
-                     Alert("An error occured when modifying order ticket-" + IntegerToString(OrderTicket()) + " | Error Code - " + IntegerToString(GetLastError()));
+               if (!result) Alert("An error occured when closing, order ticket-", OrderTicket(), " | Error Code - ", GetLastError());
+               else PlaySound("Ok.wav");               
             }
          }
       }
-      ObjectSetInteger(0, buttonName, OBJPROP_STATE, false);
+      ObjectSetInteger(0, DELETE_BUTTON_NAME, OBJPROP_STATE, false);
    }
+}
+
+void ModifyTrades()
+{
+   if (bool(ObjectGetInteger(0, BE_BUTTON_NAME, OBJPROP_STATE)))
+   {
+      for (int i=0; i < OrdersTotal(); i++)
+      {
+         if (OrderSelect(i, SELECT_BY_POS))
+         {
+            if (OrderSymbol() == Symbol() && OrderMagicNumber() == magicNumber)
+            {
+               bool result = true;
+                     
+               if(priceState(priceStatus(), OrderOpenPrice())) result = OrderModify(OrderTicket(), OrderOpenPrice(), OrderOpenPrice(), OrderTakeProfit(), 0, clrNONE);
+               else Alert("Sorry! you cannot modify your stoploss! The open price is not 'above or lower' than the entry price!");
+               
+               if (!result) Alert("An error occured on order ticket-", OrderTicket(), " | Error Code - ", GetLastError());
+               else PlaySound("Ok.wav");               
+            }
+         }
+      }
+      ObjectSetInteger(0, BE_BUTTON_NAME, OBJPROP_STATE, false);
+   }
+}
+
+bool priceState(string state, double openPrice)
+{
+   if(state == "buy") return Ask > openPrice;
+   if(state == "sell") return Bid < openPrice;
+   
+   return false;
 }
 
 void OnChartEvent(const int id, const long& lparam, const double& dparam, const string& sparam) 
@@ -400,8 +438,8 @@ void OnChartEvent(const int id, const long& lparam, const double& dparam, const 
    OrderExecutionTypeRadioButtonItemEvent(id, sparam);
    
    if (sparam == ORDER_BUTTON_NAME && id == CHARTEVENT_OBJECT_CLICK) Order();
-   if (sparam == BE_BUTTON_NAME && id == CHARTEVENT_OBJECT_CLICK) ModifyTrades(BE_BUTTON_NAME, "modify");
-   if (sparam == CLOSE_BUTTON_NAME && id == CHARTEVENT_OBJECT_CLICK) ModifyTrades(CLOSE_BUTTON_NAME, "close");
+   if (sparam == BE_BUTTON_NAME && id == CHARTEVENT_OBJECT_CLICK) ModifyTrades();
+   if (sparam == DELETE_BUTTON_NAME && id == CHARTEVENT_OBJECT_CLICK) CloseTrades();
 }
 
 double PipSize(string symbol)
