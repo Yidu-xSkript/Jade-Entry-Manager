@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//|                                                 EntryManager.mq4 |
+//|                                                 JadeEntryManager.mq4 |
 //|                                                      JadeCapital |
 //|                                      https://www.jadecapital.com |
 //+------------------------------------------------------------------+
@@ -10,7 +10,7 @@
 string ORDER_BUTTON_NAME = "OrderButton";
 string BE_BUTTON_NAME = "BEButton";
 string DELETE_BUTTON_NAME = "DeleteButton";
-double risk_percent = 0.22;
+double risk_percent = 0.25;
 double stop_loss = 10.2; //pips need to change to stoploss
 double entry_price = 0.00001;
 double spreadInPoints = 0;
@@ -52,7 +52,7 @@ void GUI_Build()
 {  
    // Risk Text Field
    CreateLabel("risk_percent_label", 10, 20, "Risk % (*)");
-   CreateTextField("risk_percent", 140, 30, 10, 50, "0.22");
+   CreateTextField("risk_percent", 140, 30, 10, 50, "0.25");
    
    // stop loss price Text Field
    CreateLabel("stop_loss_pips_label", 160, 20, "Stop Loss - Pips (*)");
@@ -459,9 +459,13 @@ double GetLots()
    
    if (risk_percent > 0) {
       double riskAmt = AccountBalance() * (risk_percent/100);
-      lots = NormalizeDouble(((riskAmt / (spreadInPoints + stop_loss)) / PointVal()) * 0.1, 2);
+      lots = NormalizeDouble(((riskAmt / ((spreadInPoints * 0.1) + stop_loss)) / PointVal()) * 0.1, 2);
    }
-   
+   // So i just found out that i made an error in my code.
+   // my risk management algorithm calculated the wrong lots because of the error i made and now my profit is cut by almost half.
+   // I was supposed to profit $11,000 - 11% but now my profit will be $5,306.40 - 5.3%
+   // The error was cause when calculating spreads. i should have multiplied the points with 0.1
+   // Always test your code before implementing it. -- That's the lesson here. Thank God that it's a demo account.
    if (lots < MarketInfo(Symbol(), MODE_MINLOT)) 
    {
       lots = 0;
