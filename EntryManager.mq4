@@ -8,6 +8,7 @@
 #include <Controls\Button.mqh>;
 
 string ORDER_BUTTON_NAME = "OrderButton";
+string ORDER_TWICE_BUTTON_NAME = "OrderButtonTwice";
 string BE_BUTTON_NAME = "BEButton";
 string DELETE_BUTTON_NAME = "DeleteButton";
 double risk_percent = 0.25;
@@ -75,9 +76,10 @@ void GUI_Build()
    DestroyEntryPriceTextField();
    
    // Order Button
-   CreateButton("Place Order", clrWhite, clrGreen, clrWhite, 10, 250, ORDER_BUTTON_NAME, 10, 0, 300, 50);
-   CreateButton("X Orders [P | O]", clrBlack, clrWhiteSmoke, clrBlack, 10, 320, DELETE_BUTTON_NAME, 10, 0, 140, 50);
-   CreateButton("Break Even", clrBlack, clrWhiteSmoke, clrBlack, 180, 320, BE_BUTTON_NAME, 10, 0, 140, 50);
+   CreateButton("Place Order", clrWhite, clrGreen, clrWhite, 180, 250, ORDER_BUTTON_NAME, 10, 0, 140, 50);
+   CreateButton("Place Order x2", clrWhite, clrBlue, clrWhite, 10, 250, ORDER_TWICE_BUTTON_NAME, 10, 0, 140, 50);
+   CreateButton("X Orders [P | O]", clrBlack, clrWhiteSmoke, clrBlack, 10, 310, DELETE_BUTTON_NAME, 10, 0, 140, 50);
+   CreateButton("Break Even", clrBlack, clrWhiteSmoke, clrBlack, 180, 310, BE_BUTTON_NAME, 10, 0, 140, 50);
 }
 
 void CreateEntryPriceTextField()
@@ -282,6 +284,7 @@ void OrderTypeRadioButtonItemEvent(int id, string sparam)
       
       ObjectDelete(0, "order_execution_type_label");
       ObjectSetInteger(0, ORDER_BUTTON_NAME, OBJPROP_YDISTANCE, 360);
+      ObjectSetInteger(0, ORDER_TWICE_BUTTON_NAME, OBJPROP_YDISTANCE, 360);
       ObjectSetInteger(0, BE_BUTTON_NAME, OBJPROP_YDISTANCE, 420);
       ObjectSetInteger(0, DELETE_BUTTON_NAME, OBJPROP_YDISTANCE, 420);
    }
@@ -293,8 +296,9 @@ void OrderTypeRadioButtonItemEvent(int id, string sparam)
    
       ObjectDelete(0, "limit_order_type_label");
       ObjectSetInteger(0, ORDER_BUTTON_NAME, OBJPROP_YDISTANCE, 250);
-      ObjectSetInteger(0, BE_BUTTON_NAME, OBJPROP_YDISTANCE, 320);
-      ObjectSetInteger(0, DELETE_BUTTON_NAME, OBJPROP_YDISTANCE, 320);
+      ObjectSetInteger(0, ORDER_TWICE_BUTTON_NAME, OBJPROP_YDISTANCE, 250);
+      ObjectSetInteger(0, BE_BUTTON_NAME, OBJPROP_YDISTANCE, 310);
+      ObjectSetInteger(0, DELETE_BUTTON_NAME, OBJPROP_YDISTANCE, 310);
       DestroyEntryPriceTextField();
       
       radioGroup2Created = false;
@@ -315,9 +319,9 @@ void OrderExecutionTypeRadioButtonItemEvent(int id, string sparam)
    RadioButtonOnChangeEvent(id, sparam, 2, item, "OrderExecutionType");
 }
 
-void Order()
+void Order(string buttonName)
 {
-   if (bool(ObjectGetInteger(0, ORDER_BUTTON_NAME, OBJPROP_STATE)))
+   if (bool(ObjectGetInteger(0, buttonName, OBJPROP_STATE)))
    {
       string risk_percent_string = ObjectGetString(0, "risk_percent", OBJPROP_TEXT);
       risk_percent = StringToDouble(risk_percent_string);
@@ -349,22 +353,43 @@ void Order()
       if (orderTypeVal == 0 && radioGroup3Created) 
       {
          ticketType = orderExecTypeVal == 0 ? OP_BUY : OP_SELL;
-         ticket = OrderSend(_Symbol, ticketType, lots, orderExecTypeVal == 0 ? Ask : Bid, slippage, stoploss, 0, "", magicNumber, 0, clrTeal);
+         if (buttonName == ORDER_TWICE_BUTTON_NAME)
+               for (int i=0; i<2; i++)
+               {
+                  ticket = OrderSend(_Symbol, ticketType, lots, orderExecTypeVal == 0 ? Ask : Bid, slippage, stoploss, 0, "", magicNumber, 0, clrTeal);
+                  ticketState(ticket);
+               }
+         else 
+         {
+            ticket = OrderSend(_Symbol, ticketType, lots, orderExecTypeVal == 0 ? Ask : Bid, slippage, stoploss, 0, "", magicNumber, 0, clrTeal);
+            ticketState(ticket);
+         }
       }      
       if (orderTypeVal == 1 && radioGroup2Created)
       {
          ticketType = limitOrderTypeVal == 0 ? OP_BUYSTOP : limitOrderTypeVal == 1 ? OP_SELLSTOP : limitOrderTypeVal == 2 ? OP_BUYLIMIT : limitOrderTypeVal == 3 ? OP_SELLLIMIT : NULL;
-         ticket = OrderSend(_Symbol, ticketType, lots, limitOrderTypeVal == 0 || limitOrderTypeVal == 2 ? entryPlusSpread : entry_price, slippage, stoploss, 0, "", magicNumber, 0, clrTeal);
+         if (buttonName == ORDER_TWICE_BUTTON_NAME) 
+               for (int i=0; i<2; i++)
+               {
+                  ticket = OrderSend(_Symbol, ticketType, lots, limitOrderTypeVal == 0 || limitOrderTypeVal == 2 ? entryPlusSpread : entry_price, slippage, stoploss, 0, "", magicNumber, 0, clrTeal);
+               }
+         else 
+         {
+            ticket = OrderSend(_Symbol, ticketType, lots, limitOrderTypeVal == 0 || limitOrderTypeVal == 2 ? entryPlusSpread : entry_price, slippage, stoploss, 0, "", magicNumber, 0, clrTeal);
+         }
       }
       
-      if(ticket == -1) {
-         PlaySound("timeout.wav");
-         Alert("An error has occured: Error-" + IntegerToString(GetLastError()));
-      }
-      else PlaySound("Ok.wav");
-      
-      ObjectSetInteger(0, ORDER_BUTTON_NAME, OBJPROP_STATE, false);
+      ObjectSetInteger(0, buttonName, OBJPROP_STATE, false);
    }
+}
+
+void ticketState(int ticket)
+{
+   if(ticket == -1) {
+      PlaySound("timeout.wav");
+      Alert("An error has occured: Error-" + IntegerToString(GetLastError()));
+   }
+   else PlaySound("Ok.wav");
 }
 
 string priceStatus()
@@ -437,7 +462,8 @@ void OnChartEvent(const int id, const long& lparam, const double& dparam, const 
    LimitOrderTypeRadioButtonItemEvent(id, sparam);
    OrderExecutionTypeRadioButtonItemEvent(id, sparam);
    
-   if (sparam == ORDER_BUTTON_NAME && id == CHARTEVENT_OBJECT_CLICK) Order();
+   if (sparam == ORDER_BUTTON_NAME && id == CHARTEVENT_OBJECT_CLICK) Order(ORDER_BUTTON_NAME);
+   if (sparam == ORDER_TWICE_BUTTON_NAME && id == CHARTEVENT_OBJECT_CLICK) Order(ORDER_TWICE_BUTTON_NAME);
    if (sparam == BE_BUTTON_NAME && id == CHARTEVENT_OBJECT_CLICK) ModifyTrades();
    if (sparam == DELETE_BUTTON_NAME && id == CHARTEVENT_OBJECT_CLICK) CloseTrades();
 }
