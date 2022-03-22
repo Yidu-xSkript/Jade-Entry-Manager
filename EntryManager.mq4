@@ -353,15 +353,16 @@ void Order(string buttonName)
       if (orderTypeVal == 0 && radioGroup3Created) 
       {
          ticketType = orderExecTypeVal == 0 ? OP_BUY : OP_SELL;
+         double currentPrice = orderExecTypeVal == 0 ? Ask : Bid;
          if (buttonName == ORDER_TWICE_BUTTON_NAME)
                for (int i=0; i<2; i++)
                {
-                  ticket = OrderSend(_Symbol, ticketType, lots, orderExecTypeVal == 0 ? Ask : Bid, slippage, stoploss, 0, "", magicNumber, 0, clrTeal);
+                  ticket = OrderSend(_Symbol, ticketType, lots, currentPrice, slippage, stoploss, 0, "", magicNumber, 0, clrTeal);
                   ticketState(ticket);
                }
          else 
          {
-            ticket = OrderSend(_Symbol, ticketType, lots, orderExecTypeVal == 0 ? Ask : Bid, slippage, stoploss, 0, "", magicNumber, 0, clrTeal);
+            ticket = OrderSend(_Symbol, ticketType, lots, currentPrice, slippage, stoploss, 0, "", magicNumber, 0, clrTeal);
             ticketState(ticket);
          }
       }      
