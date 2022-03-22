@@ -15,6 +15,7 @@ double risk_percent = 0.25;
 double stop_loss = 10.2; //pips need to change to stoploss
 double entry_price = 0.00001;
 double spreadInPoints = 0;
+double currentPrice, spread, lots, stoploss, entryPlusSpread;
 
 int orderTypeVal = 0;
 int limitOrderTypeVal = 0;
@@ -76,8 +77,8 @@ void GUI_Build()
    DestroyEntryPriceTextField();
    
    // Order Button
-   CreateButton("Place Order", clrWhite, clrGreen, clrWhite, 180, 250, ORDER_BUTTON_NAME, 10, 0, 140, 50);
-   CreateButton("Place Order x2", clrWhite, clrBlue, clrWhite, 10, 250, ORDER_TWICE_BUTTON_NAME, 10, 0, 140, 50);
+   CreateButton("Place Order", clrWhite, clrGreen, clrBlack, 180, 250, ORDER_BUTTON_NAME, 10, 0, 140, 50);
+   CreateButton("Place Order x2", clrWhite, clrBlue, clrBlack, 10, 250, ORDER_TWICE_BUTTON_NAME, 10, 0, 140, 50);
    CreateButton("Close [P | O]", clrBlack, clrWhiteSmoke, clrBlack, 10, 310, DELETE_BUTTON_NAME, 10, 0, 140, 50);
    CreateButton("Break Even", clrBlack, clrWhiteSmoke, clrBlack, 180, 310, BE_BUTTON_NAME, 10, 0, 140, 50);
 }
@@ -335,9 +336,9 @@ void Order(string buttonName)
          entry_price = StringToDouble(entry_price_string);
       }
       
-      double spread = CalculateSpread(Ask, Bid);
-      double lots = GetLots();
-      double stoploss = orderTypeVal == 0 && radioGroup3Created ? 
+      spread = CalculateSpread(Ask, Bid);
+      lots = GetLots();
+      stoploss = orderTypeVal == 0 && radioGroup3Created ? 
                         orderExecTypeVal == 0 ? 
                         Ask - PipsToPrice(stop_loss) : 
                         Bid + PipsToPrice(stop_loss) + spread : 
@@ -345,7 +346,7 @@ void Order(string buttonName)
                         entry_price - PipsToPrice(stop_loss) :
                         entry_price + (PipsToPrice(stop_loss) + spread);
                         
-      double entryPlusSpread = entry_price + spread;
+      entryPlusSpread = entry_price + spread;
       
       int ticket = 0;
       int ticketType = 0;
@@ -353,7 +354,7 @@ void Order(string buttonName)
       if (orderTypeVal == 0 && radioGroup3Created) 
       {
          ticketType = orderExecTypeVal == 0 ? OP_BUY : OP_SELL;
-         double currentPrice = orderExecTypeVal == 0 ? Ask : Bid;
+         currentPrice = orderExecTypeVal == 0 ? Ask : Bid;
          if (buttonName == ORDER_TWICE_BUTTON_NAME)
                for (int i=0; i<2; i++)
                {
@@ -373,10 +374,12 @@ void Order(string buttonName)
                for (int i=0; i<2; i++)
                {
                   ticket = OrderSend(_Symbol, ticketType, lots, limitOrderTypeVal == 0 || limitOrderTypeVal == 2 ? entryPlusSpread : entry_price, slippage, stoploss, 0, "", magicNumber, 0, clrTeal);
+                  ticketState(ticket);
                }
          else 
          {
             ticket = OrderSend(_Symbol, ticketType, lots, limitOrderTypeVal == 0 || limitOrderTypeVal == 2 ? entryPlusSpread : entry_price, slippage, stoploss, 0, "", magicNumber, 0, clrTeal);
+            ticketState(ticket);
          }
       }
       
@@ -482,29 +485,29 @@ double PipsToPrice(double pips) {
 
 double GetLots()
 {
-   double lots = 0.25;
+   double lotz = 0.25;
    
    if (risk_percent > 0) {
       double riskAmt = AccountBalance() * (risk_percent/100);
-      lots = NormalizeDouble(((riskAmt / ((spreadInPoints * 0.1) + stop_loss)) / PointVal()) * 0.1, 2);
+      lotz = NormalizeDouble(((riskAmt / ((spreadInPoints * 0.1) + stop_loss)) / PointVal()) * 0.1, 2);
    }
    // So i just found out that i made an error in my code.
    // my risk management algorithm calculated the wrong lots because of the error i made and now my profit is cut by almost half.
    // I was supposed to profit $11,000 - 11% but now my profit will be $5,306.40 - 5.3%
    // The error was cause when calculating spreads. i should have multiplied the points with 0.1
    // Always test your code before implementing it. -- That's the lesson here. Thank God that it's a demo account.
-   if (lots < MarketInfo(Symbol(), MODE_MINLOT)) 
+   if (lotz < MarketInfo(Symbol(), MODE_MINLOT)) 
    {
-      lots = 0;
+      lotz = 0;
       Alert("Lots traded is too small for your the broker");
    }
    else if (lots > MarketInfo(Symbol(), MODE_MAXLOT)) 
    {
-      lots = 0;
+      lotz = 0;
       Alert("Lots traded is too large for your the broker");
    }
       
-   return lots;
+   return lotz;
 }
 
 double PointVal() 
