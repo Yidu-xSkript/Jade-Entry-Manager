@@ -78,7 +78,7 @@ void GUI_Build()
    // Order Button
    CreateButton("Place Order", clrWhite, clrGreen, clrWhite, 180, 250, ORDER_BUTTON_NAME, 10, 0, 140, 50);
    CreateButton("Place Order x2", clrWhite, clrBlue, clrWhite, 10, 250, ORDER_TWICE_BUTTON_NAME, 10, 0, 140, 50);
-   CreateButton("X Orders [P | O]", clrBlack, clrWhiteSmoke, clrBlack, 10, 310, DELETE_BUTTON_NAME, 10, 0, 140, 50);
+   CreateButton("Close [P | O]", clrBlack, clrWhiteSmoke, clrBlack, 10, 310, DELETE_BUTTON_NAME, 10, 0, 140, 50);
    CreateButton("Break Even", clrBlack, clrWhiteSmoke, clrBlack, 180, 310, BE_BUTTON_NAME, 10, 0, 140, 50);
 }
 
