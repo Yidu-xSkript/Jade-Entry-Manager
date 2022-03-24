@@ -486,6 +486,7 @@ double PipsToPrice(double pips) {
 double GetLots()
 {
    double lotz = 0.25;
+   double lotstep = MarketInfo(Symbol(), MODE_LOTSTEP);
    
    if (risk_percent > 0) {
       double riskAmt = AccountBalance() * (risk_percent/100);
@@ -496,15 +497,17 @@ double GetLots()
    // I was supposed to profit $11,000 - 11% but now my profit will be $5,306.40 - 5.3%
    // The error was cause when calculating spreads. i should have multiplied the points with 0.1
    // Always test your code before implementing it. -- That's the lesson here. Thank God that it's a demo account.
+   lotz = MathFloor(lotz / lotstep) * lotstep;
+   
    if (lotz < MarketInfo(Symbol(), MODE_MINLOT)) 
    {
       lotz = 0;
-      Alert("Lots traded is too small for your the broker");
+      Alert("Lots traded is too small for the broker");
    }
    else if (lots > MarketInfo(Symbol(), MODE_MAXLOT)) 
    {
       lotz = 0;
-      Alert("Lots traded is too large for your the broker");
+      Alert("Lots traded is too large for the broker");
    }
       
    return lotz;
