@@ -11,7 +11,7 @@ string ORDER_BUTTON_NAME = "OrderButton";
 string ORDER_TWICE_BUTTON_NAME = "OrderButtonTwice";
 string BE_BUTTON_NAME = "BEButton";
 string DELETE_BUTTON_NAME = "DeleteButton";
-double risk_percent = 0.25;
+double risk_percent = 0.5;
 double stop_loss = 10.2; //pips need to change to stoploss
 double entry_price = 0.00001;
 double spreadInPoints = 0;
@@ -54,7 +54,7 @@ void GUI_Build()
 {  
    // Risk Text Field
    CreateLabel("risk_percent_label", 10, 20, "Risk % (*)");
-   CreateTextField("risk_percent", 140, 30, 10, 50, "0.25");
+   CreateTextField("risk_percent", 140, 30, 10, 50, "0.5");
    
    // stop loss price Text Field
    CreateLabel("stop_loss_pips_label", 160, 20, "Stop Loss - Pips (*)");
@@ -155,6 +155,7 @@ void CreateLabel(string field_name, int xdistance, int ydistance, string label_n
    ObjectSetInteger(0, field_name, OBJPROP_XDISTANCE, xdistance);
    ObjectSetInteger(0, field_name, OBJPROP_YDISTANCE, ydistance);
    ObjectSetString(0, field_name,OBJPROP_TEXT,label_name);
+   ObjectSetInteger(0, field_name, OBJPROP_COLOR, clrBlack);
 }
 
 
@@ -335,6 +336,8 @@ void Order(string buttonName)
          string entry_price_string = ObjectGetString(0, "entry_price", OBJPROP_TEXT);
          entry_price = StringToDouble(entry_price_string);
       }
+      double Ask = SymbolInfoDouble(_Symbol,SYMBOL_ASK);
+      double Bid = SymbolInfoDouble(_Symbol,SYMBOL_BID);
       
       spread = CalculateSpread(Ask, Bid);
       lots = GetLots();
@@ -350,35 +353,58 @@ void Order(string buttonName)
       
       int ticket = 0;
       int ticketType = 0;
+      
+      MqlTradeRequest request={};
+      MqlTradeResult  result={};
                         
       if (orderTypeVal == 0 && radioGroup3Created) 
       {
-         ticketType = orderExecTypeVal == 0 ? OP_BUY : OP_SELL;
+         ticketType = orderExecTypeVal == 0 ? ORDER_TYPE_BUY : ORDER_TYPE_SELL;
          currentPrice = orderExecTypeVal == 0 ? Ask : Bid;
+         
+         request.action = TRADE_ACTION_DEAL;
+         request.symbol = Symbol();
+         request.volume = lots;
+         request.type = ticketType;
+         request.price = currentPrice;
+         request.deviation = slippage;
+         request.magic = magicNumber;
+         request.sl = stoploss;
+         
          if (buttonName == ORDER_TWICE_BUTTON_NAME)
                for (int i=0; i<2; i++)
                {
-                  ticket = OrderSend(_Symbol, ticketType, lots, currentPrice, slippage, stoploss, 0, "", magicNumber, 0, clrTeal);
+                  ticket = OrderSend(request,result);
                   ticketState(ticket);
                }
          else 
          {
-            ticket = OrderSend(_Symbol, ticketType, lots, currentPrice, slippage, stoploss, 0, "", magicNumber, 0, clrTeal);
+            ticket = OrderSend(request, result);
             ticketState(ticket);
          }
       }      
       if (orderTypeVal == 1 && radioGroup2Created)
       {
-         ticketType = limitOrderTypeVal == 0 ? OP_BUYSTOP : limitOrderTypeVal == 1 ? OP_SELLSTOP : limitOrderTypeVal == 2 ? OP_BUYLIMIT : limitOrderTypeVal == 3 ? OP_SELLLIMIT : NULL;
+         ticketType = limitOrderTypeVal == 0 ? ORDER_TYPE_BUY_STOP : limitOrderTypeVal == 1 ? ORDER_TYPE_SELL_STOP : limitOrderTypeVal == 2 ? ORDER_TYPE_BUY_LIMIT : limitOrderTypeVal == 3 ? ORDER_TYPE_SELL_LIMIT : NULL;
+         
+         request.action = TRADE_ACTION_PENDING;
+         request.symbol = Symbol();
+         request.volume = lots;
+         request.type = ticketType;
+         request.price = limitOrderTypeVal == 0 || limitOrderTypeVal == 2 ? entryPlusSpread : entry_price;
+         request.deviation = slippage;
+         request.magic = magicNumber;
+         request.sl = stoploss;
+         
          if (buttonName == ORDER_TWICE_BUTTON_NAME) 
                for (int i=0; i<2; i++)
                {
-                  ticket = OrderSend(_Symbol, ticketType, lots, limitOrderTypeVal == 0 || limitOrderTypeVal == 2 ? entryPlusSpread : entry_price, slippage, stoploss, 0, "", magicNumber, 0, clrTeal);
+                  ticket = OrderSend(request, result);
                   ticketState(ticket);
                }
          else 
          {
-            ticket = OrderSend(_Symbol, ticketType, lots, limitOrderTypeVal == 0 || limitOrderTypeVal == 2 ? entryPlusSpread : entry_price, slippage, stoploss, 0, "", magicNumber, 0, clrTeal);
+            ticket = OrderSend(request, result);
             ticketState(ticket);
          }
       }
@@ -398,31 +424,69 @@ void ticketState(int ticket)
 
 string priceStatus()
 {
-   return OrderType() == OP_BUY || OrderType() == OP_BUYSTOP || OrderType() == OP_SELLLIMIT ? "buy" : "sell";
+   return PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY ? "buy" : "sell";
 }
+
+
 
 void CloseTrades()
 {
+   MqlTradeRequest request;
+   MqlTradeResult  result;
+   int total = OrdersTotal() + PositionsTotal();
+   
+   //--- Don't close open positions and orders at the same time.
+   
+   
    if (bool(ObjectGetInteger(0, DELETE_BUTTON_NAME, OBJPROP_STATE)))
    {
-      for(int i=1; i <= OrdersTotal(); i++)
+      if (total == 0) Alert("There are no executed orders!");
+      
+      for(int i=total - 1; i >= 0; i--)
       {
-         while(OrderSelect(i-1, SELECT_BY_POS))
+         ulong magic = 0;
+         ulong  order_ticket=OrderGetTicket(i);
+         ulong  position_ticket=PositionGetTicket(i);
+         string position_symbol=PositionGetString(POSITION_SYMBOL);
+         int    digits=(int)SymbolInfoInteger(position_symbol,SYMBOL_DIGITS);
+         double volume=PositionGetDouble(POSITION_VOLUME);
+         ENUM_POSITION_TYPE type=(ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+         
+         if (OrdersTotal() > 0)magic=OrderGetInteger(ORDER_MAGIC);
+         if (PositionsTotal() > 0) magic=PositionGetInteger(POSITION_MAGIC);
+         
+         if ((OrderGetString(ORDER_SYMBOL) == Symbol() && magic == magicNumber) || (PositionGetString(POSITION_SYMBOL) == Symbol() && magic == magicNumber))
          {
-            if (OrderSymbol() == Symbol() && OrderMagicNumber() == magicNumber)
-            {
-               bool result = true;
-               if (OrderType() > 1)  result = OrderDelete(OrderTicket());
-               else if (OrderType() != -1 && OrderType() <= 1) result = OrderClose(OrderTicket(), OrderLots(), priceStatus() == "buy" ? Ask : Bid, slippage, clrRed);
-               else {
-                  Alert("Sorry, An error has occured. Error-", GetLastError());
-                  break;
-               }
-               
-               if (!result) Alert("An error occured when closing, order ticket-", OrderTicket(), " | Error Code - ", GetLastError());
-               else PlaySound("Ok.wav");               
+            ZeroMemory(request);
+            ZeroMemory(result);
+            
+            if (OrdersTotal() > 0) {
+               request.action=TRADE_ACTION_REMOVE;                   // type of trade operation
+               request.order = order_ticket;
             }
+            if (PositionsTotal() > 0) {
+               request.action   =TRADE_ACTION_DEAL;        // type of trade operation
+               request.position =position_ticket;          // ticket of the position
+               request.symbol   =position_symbol;          // symbol 
+               request.volume   =volume;                   // volume of the position
+               request.deviation=5;                        // allowed deviation from the price
+               request.magic    =magicNumber; 
+               if(type == POSITION_TYPE_BUY)
+               {
+                  request.price=SymbolInfoDouble(position_symbol,SYMBOL_BID);
+                  request.type =ORDER_TYPE_SELL;
+               }
+               else
+               {
+                  request.price=SymbolInfoDouble(position_symbol,SYMBOL_ASK);
+                  request.type =ORDER_TYPE_BUY;
+               }
+            }
+            
+            if (!OrderSend(request, result)) Alert("An error occured when closing | Error Code - ", GetLastError());
+            else PlaySound("Ok.wav");               
          }
+         else Alert("Sorry the \"order symbol\" is not equal to the symbol you are clicking on! You need to click on ", OrderGetString(ORDER_SYMBOL), " to close trades");
       }
       ObjectSetInteger(0, DELETE_BUTTON_NAME, OBJPROP_STATE, false);
    }
@@ -432,20 +496,29 @@ void ModifyTrades()
 {
    if (bool(ObjectGetInteger(0, BE_BUTTON_NAME, OBJPROP_STATE)))
    {
-      for (int i=0; i < OrdersTotal(); i++)
+      MqlTradeRequest request;
+      MqlTradeResult  result;
+      for (int i=0; i < PositionsTotal(); i++)
       {
-         if (OrderSelect(i, SELECT_BY_POS))
+         ulong  position_ticket=PositionGetTicket(i);
+         string position_symbol=PositionGetString(POSITION_SYMBOL);
+         
+         if (position_symbol == Symbol() && PositionGetInteger(POSITION_MAGIC) == magicNumber)
          {
-            if (OrderSymbol() == Symbol() && OrderMagicNumber() == magicNumber)
-            {
-               bool result = true;
-                     
-               if(priceState(priceStatus(), OrderOpenPrice())) result = OrderModify(OrderTicket(), OrderOpenPrice(), OrderOpenPrice(), OrderTakeProfit(), 0, clrNONE);
-               else Alert("Sorry! you cannot modify your stoploss! The open price is not 'above or lower' than the entry price!");
+            if (priceState(priceStatus(), PositionGetDouble(POSITION_PRICE_OPEN))){
+               ZeroMemory(request);
+               ZeroMemory(result);
                
-               if (!result) Alert("An error occured on order ticket-", OrderTicket(), " | Error Code - ", GetLastError());
-               else PlaySound("Ok.wav");               
+               request.action = TRADE_ACTION_SLTP;
+               request.position = position_ticket;
+               request.symbol = position_symbol;
+               request.magic = magicNumber;
+               request.sl = PositionGetDouble(POSITION_PRICE_OPEN);
+               
+               if (!OrderSend(request, result)) Alert("An error occured on Position ticket-", position_ticket, " | Error Code - ", GetLastError());
+               else PlaySound("Ok.wav");   
             }
+            else Alert("Sorry! you cannot modify your stoploss! The open price is not 'above or lower' than the entry price!");            
          }
       }
       ObjectSetInteger(0, BE_BUTTON_NAME, OBJPROP_STATE, false);
@@ -454,6 +527,9 @@ void ModifyTrades()
 
 bool priceState(string state, double openPrice)
 {
+   double Ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+   double Bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+   
    if(state == "buy") return Ask > openPrice;
    if(state == "sell") return Bid < openPrice;
    
@@ -474,8 +550,8 @@ void OnChartEvent(const int id, const long& lparam, const double& dparam, const 
 
 double PipSize(string symbol)
 {
-   double point = MarketInfo(symbol, MODE_POINT);
-   int digits = (int)MarketInfo(symbol, MODE_DIGITS);
+   double point = SymbolInfoDouble(symbol, SYMBOL_POINT);
+   int digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
    return(((digits % 2) == 1) ? point*10 : point);
 }
 
@@ -486,10 +562,10 @@ double PipsToPrice(double pips) {
 double GetLots()
 {
    double lotz = 0.25;
-   double lotstep = MarketInfo(Symbol(), MODE_LOTSTEP);
+   double lotstep = SymbolInfoDouble(Symbol(), SYMBOL_VOLUME_STEP);
    
    if (risk_percent > 0) {
-      double riskAmt = AccountBalance() * (risk_percent/100);
+      double riskAmt = AccountInfoDouble(ACCOUNT_BALANCE) * (risk_percent/100);
       lotz = NormalizeDouble(((riskAmt / ((spreadInPoints * 0.1) + stop_loss)) / PointVal()) * 0.1, 2);
    }
    // So i just found out that i made an error in my code.
@@ -499,12 +575,12 @@ double GetLots()
    // Always test your code before implementing it. -- That's the lesson here. Thank God that it's a demo account.
    lotz = MathFloor(lotz / lotstep) * lotstep;
    
-   if (lotz < MarketInfo(Symbol(), MODE_MINLOT)) 
+   if (lotz < SymbolInfoDouble(Symbol(), SYMBOL_VOLUME_MIN)) 
    {
       lotz = 0;
       Alert("Lots traded is too small for the broker");
    }
-   else if (lots > MarketInfo(Symbol(), MODE_MAXLOT)) 
+   else if (lots > SymbolInfoDouble(Symbol(), SYMBOL_VOLUME_MAX)) 
    {
       lotz = 0;
       Alert("Lots traded is too large for the broker");
@@ -515,9 +591,9 @@ double GetLots()
 
 double PointVal() 
 {
-   double tickSize = MarketInfo(Symbol(), MODE_TICKSIZE);
-   double tickValue = MarketInfo(Symbol(), MODE_TICKVALUE);
-   double point = MarketInfo(Symbol(), MODE_POINT);
+   double tickSize = SymbolInfoDouble(Symbol(), SYMBOL_TRADE_TICK_SIZE);
+   double tickValue = SymbolInfoDouble(Symbol(), SYMBOL_TRADE_TICK_VALUE);
+   double point = SymbolInfoDouble(Symbol(), SYMBOL_POINT);
    double ticksPerPt = tickSize / point;
    return tickValue / ticksPerPt;
 }
